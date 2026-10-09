@@ -14,6 +14,7 @@ import { Stage } from './components/Stage';
 import { PropsPanel } from './components/PropsPanel';
 import { Timeline } from './components/Timeline';
 import { ImportSheetDialog } from './components/ImportSheetDialog';
+import { ImportVideoDialog } from './components/ImportVideoDialog';
 import { SaveLibraryDialog } from './components/SaveLibraryDialog';
 import './style.css';
 
@@ -42,7 +43,9 @@ export default function FrameAnimatorPage() {
 
   const sequenceInputRef = useRef<HTMLInputElement>(null);
   const sheetInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [dialog, setDialog] = useState<SheetDialogState | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [showSaveLib, setShowSaveLib] = useState(false);
   /** 点"重新切割"但无源图时，引导选文件后进入 reslice 模式 */
   const reslicePendingRef = useRef(false);
@@ -128,6 +131,20 @@ export default function FrameAnimatorPage() {
     setLeftTab('frames');
   };
 
+  const handleVideoImport = (items: NewFrameInput[], replace: boolean) => {
+    if (replace) replaceAllFrames(items);
+    else addBitmaps(items);
+    setLeftTab('frames');
+  };
+
+  /** 拖入文件：视频走抽帧对话框，图片走序列帧导入 */
+  const onDropFiles = (files: File[]) => {
+    const video = files.find((f) => f.type.startsWith('video/'));
+    if (video) setVideoFile(video);
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length) void importFiles(images);
+  };
+
   return (
     <ToolShell
       title="帧动画生成器"
@@ -136,6 +153,9 @@ export default function FrameAnimatorPage() {
         <>
           <Button icon="upload" onClick={onPickSequence}>导入序列帧</Button>
           <Button icon="sheet" onClick={onPickSheet}>导入精灵表</Button>
+          <Button icon="video" onClick={() => videoInputRef.current?.click()} title="导入 AI 生成视频并抽帧（如即梦/可灵的首尾帧视频）">
+            导入视频
+          </Button>
           <Button
             icon="scissors"
             onClick={onReslice}
@@ -179,7 +199,7 @@ export default function FrameAnimatorPage() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          void importFiles(Array.from(e.dataTransfer.files));
+          onDropFiles(Array.from(e.dataTransfer.files));
         }}
       >
         <Stage />
@@ -212,6 +232,17 @@ export default function FrameAnimatorPage() {
           e.target.value = '';
         }}
       />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) setVideoFile(f);
+          e.target.value = '';
+        }}
+      />
 
       {dialog && (
         <ImportSheetDialog
@@ -230,6 +261,14 @@ export default function FrameAnimatorPage() {
           confirmLabel={dialog.kind === 'subdivide' ? '确认切割' : '确认导入'}
           showModeChoice={dialog.kind !== 'subdivide' && framesCount > 0}
           defaultReplace={dialog.kind === 'reslice'}
+        />
+      )}
+      {videoFile && (
+        <ImportVideoDialog
+          file={videoFile}
+          onClose={() => setVideoFile(null)}
+          onImport={handleVideoImport}
+          showModeChoice={framesCount > 0}
         />
       )}
       {showSaveLib && <SaveLibraryDialog onClose={() => setShowSaveLib(false)} />}

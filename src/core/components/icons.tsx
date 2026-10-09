@@ -121,6 +121,12 @@ const ICONS = {
       <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
     </>
   ),
+  video: (
+    <>
+      <rect x="2" y="6" width="13" height="12" rx="2" />
+      <path d="M15 10.5 21 7.5v9l-6-3z" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof ICONS;

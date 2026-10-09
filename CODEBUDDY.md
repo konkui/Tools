@@ -21,7 +21,7 @@ npm run preview   # 预览构建产物
 - `src/core/types.ts` 定义 `ToolDefinition`（工具清单契约：id、名称、描述、图标、渐变、标签、排序、懒加载组件）。
 - `src/core/registry.ts` 通过 `import.meta.glob('../tools/*/manifest.ts', { eager: true })` 自动发现所有工具，校验重复 id / 缺失导出，`enabled: false` 可临时下架。
 - `src/App.tsx` 用统一的 `/tools/:toolId` 动态路由解析到注册表组件（React.lazy + Suspense），新工具**不需要**加路由。
-- 每个工具模块结构：`manifest.ts`（default 导出 ToolDefinition，`component: lazy(() => import('./Page'))`）+ `Page.tsx`（default 导出页面）+ 私有的组件/状态/样式文件。参考已实现范例 `src/tools/frame-animator/`：`store.ts`（zustand + IndexedDB 防抖自动保存）、`library.ts`（素材库）、`logic/`（packer/exporter 纯逻辑）、`components/`（UI）、`style.css`（私有样式，fa- 前缀）。
+- 每个工具模块结构：`manifest.ts`（default 导出 ToolDefinition，`component: lazy(() => import('./Page'))`）+ `Page.tsx`（default 导出页面）+ 私有的组件/状态/样式文件。参考已实现范例 `src/tools/frame-animator/`：`store.ts`（zustand + IndexedDB 防抖自动保存）、`library.ts`（素材库）、`logic/`（packer/exporter/videoExtract 纯逻辑）、`components/`（UI）、`style.css`（私有样式，fa- 前缀）。
 - 工具的 `id` 即路由路径，全局唯一。
 
 新增一个工具的完整流程：复制任一现有工具文件夹 → 改 manifest 的 id/name/描述/图标/order → 在 Page.tsx 实现界面。完成。
