@@ -1,0 +1,76 @@
+- generic [ref=e10]:
+  - generic [ref=e11]:
+    - button "返回首页" [ref=e12] [cursor=pointer]
+    - generic [ref=e15]: 帧动画生成器
+    - generic [ref=e16]: 未命名动画.anim.json
+    - button "导入序列帧" [ref=e17] [cursor=pointer]
+    - button "导入精灵表" [ref=e21] [cursor=pointer]
+    - button "重新切割" [active] [ref=e25] [cursor=pointer]
+    - button "保存到库" [disabled] [ref=e31] [cursor=pointer]
+    - button "素材库" [ref=e35] [cursor=pointer]
+  - generic [ref=e39]:
+    - complementary [ref=e40]:
+      - generic [ref=e41]:
+        - button "帧列表" [ref=e42] [cursor=pointer]
+        - button "素材库" [ref=e43] [cursor=pointer]
+      - generic [ref=e44]:
+        - text: 帧列表
+        - generic [ref=e45]: 0 帧
+      - generic [ref=e46]: 暂无帧
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e52]:
+          - generic [ref=e56]: 导入序列帧或精灵表开始制作
+          - generic [ref=e57]: 也可以直接把图片文件拖进来
+        - generic [ref=e58]:
+          - button "上一帧" [ref=e59] [cursor=pointer]
+          - button "播放 (空格)" [ref=e63] [cursor=pointer]
+          - button "下一帧" [ref=e66] [cursor=pointer]
+          - generic [ref=e71]: 速度
+          - slider [ref=e72] [cursor=pointer]: "1"
+          - generic [ref=e73]: 1×
+          - button "洋葱皮" [ref=e75] [cursor=pointer]
+          - generic [ref=e76]: 缩放
+          - slider [ref=e77] [cursor=pointer]: "3"
+          - generic [ref=e78]: 300%
+          - generic [ref=e79]: 无帧
+      - button "追加帧（导入序列帧）" [ref=e83] [cursor=pointer]
+    - complementary [ref=e86]:
+      - generic [ref=e87]: 属性
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - heading "动画" [level=4] [ref=e90]
+          - generic [ref=e91]:
+            - generic [ref=e92]: 循环模式
+            - combobox [ref=e93]:
+              - option "循环" [selected]
+              - option "单次"
+              - option "来回"
+          - generic [ref=e94]:
+            - generic [ref=e95]: 帧数
+            - generic [ref=e96]: "0"
+          - generic [ref=e97]:
+            - generic [ref=e98]: 总时长
+            - generic [ref=e99]: 0.00 s
+          - generic [ref=e100]:
+            - generic [ref=e101]: 平均 FPS
+            - generic [ref=e102]: "-"
+        - generic [ref=e103]:
+          - heading "项目" [level=4] [ref=e104]
+          - generic [ref=e105]:
+            - generic [ref=e106]: 名称
+            - textbox [ref=e107]: 未命名动画
+          - button "清空项目" [ref=e109] [cursor=pointer]
+        - generic [ref=e110]:
+          - heading "导出图集" [level=4] [ref=e111]
+          - generic [ref=e112]:
+            - generic [ref=e113]: 边距 (px)
+            - spinbutton [ref=e114]: "2"
+          - generic [ref=e115]:
+            - generic [ref=e116]: 最大尺寸
+            - combobox [ref=e117]:
+              - option "512"
+              - option "1024" [selected]
+              - option "2048"
+          - button "导出 PNG + JSON" [disabled] [ref=e118] [cursor=pointer]
+          - generic [ref=e122]: 图集自动重排（shelf 打包），JSON 含帧坐标/时长/锚点
