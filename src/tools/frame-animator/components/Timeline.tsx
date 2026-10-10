@@ -74,7 +74,7 @@ export function Timeline({ onAdd }: { onAdd: () => void }) {
               .join(' ')}
             onPointerDown={(e) => startDrag(e, i)}
             onClick={() => selectFrame(f.id)}
-            title={`帧 ${i + 1} · ${f.name}`}
+            title={`帧 ${i + 1} · ${f.name}（拖拽排序）`}
           >
             <span className="idx">{i + 1}</span>
             <img src={f.blobUrl} alt="" draggable={false} />

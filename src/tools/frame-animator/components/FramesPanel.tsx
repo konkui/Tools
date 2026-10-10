@@ -8,6 +8,7 @@ export function FramesPanel() {
   const selectedId = useAnimatorStore((s) => s.selectedId);
   const selectFrame = useAnimatorStore((s) => s.selectFrame);
   const removeFrame = useAnimatorStore((s) => s.removeFrame);
+  const moveFrame = useAnimatorStore((s) => s.moveFrame);
   const playingIndex = useAnimatorStore((s) => s.playingIndex);
 
   return (
@@ -27,20 +28,44 @@ export function FramesPanel() {
               <div className="fname">
                 {i === playingIndex && <span className="playing-dot" />}帧 {i + 1}
               </div>
-              <div className="fdur">
-                {f.durationMs} ms · {f.width}×{f.height}
+              <div className="fdur" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {f.name} · {f.durationMs} ms
               </div>
             </div>
-            <button
-              className="icon-btn danger frame-del"
-              title="删除此帧"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFrame(f.id);
-              }}
-            >
-              <Icon name="trash" size={13} />
-            </button>
+            <div className="frame-ops">
+              <button
+                className="icon-btn"
+                title="上移"
+                disabled={i === 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveFrame(i, i - 1);
+                }}
+              >
+                <Icon name="up" size={13} />
+              </button>
+              <button
+                className="icon-btn"
+                title="下移"
+                disabled={i === frames.length - 1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveFrame(i, i + 1);
+                }}
+              >
+                <Icon name="down" size={13} />
+              </button>
+              <button
+                className="icon-btn danger"
+                title="删除此帧"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFrame(f.id);
+                }}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </div>
           </div>
         ))}
         {frames.length === 0 && (

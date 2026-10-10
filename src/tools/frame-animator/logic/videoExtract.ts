@@ -97,30 +97,51 @@ export function computeSampleTimes(
 
 function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
   const target = Math.min(t, video.duration);
-  if (Math.abs(video.currentTime - target) < 0.01) return Promise.resolve();
+  const atTarget = Math.abs(video.currentTime - target) < 1e-6;
+  if (atTarget && !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error('视频 seek 超时'));
+      reject(new Error('视频帧解码超时'));
     }, 5000);
-    const onSeeked = () => {
+    const onReady = () => {
+      if (video.seeking || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
       cleanup();
       resolve();
     };
+    const onError = () => {
+      cleanup();
+      reject(new Error('视频帧解码失败'));
+    };
     const cleanup = () => {
       clearTimeout(timer);
-      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('seeked', onReady);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('error', onError);
     };
-    video.addEventListener('seeked', onSeeked);
-    video.currentTime = target;
+    video.addEventListener('seeked', onReady);
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('error', onError);
+    if (!atTarget) video.currentTime = target;
+    onReady();
   });
 }
 
 export interface ExtractOptions {
   chromaKey: boolean;
   tolerance: number;
+  /** 只去除与边缘相连的背景区 */
+  edgeOnly: boolean;
+  /** 边缘侵蚀像素数（去贴纸描边） */
+  erodePx: number;
+  /** 边缘去色污染强度，0~1 */
+  decontaminate?: number;
   /** 输出高度 px，0 = 原始尺寸 */
   targetHeight: number;
+  /** 缩放时保留硬像素边缘 */
+  pixelated?: boolean;
   namePrefix: string;
   onProgress?: (done: number, total: number) => void;
 }
@@ -136,16 +157,29 @@ export async function extractFrames(
   const w = Math.max(1, Math.round(vw * scale));
   const h = Math.max(1, Math.round(vh * scale));
   const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = vw;
+  canvas.height = vh;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  const resized = document.createElement('canvas');
+  resized.width = w;
+  resized.height = h;
+  const resizeCtx = resized.getContext('2d')!;
+  resizeCtx.imageSmoothingEnabled = !opts.pixelated;
+  resizeCtx.imageSmoothingQuality = 'high';
 
   const items: NewFrameInput[] = [];
   for (let i = 0; i < times.length; i++) {
     await seekTo(video, times[i]);
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(video, 0, 0, w, h);
-    const out = opts.chromaKey ? removeSolidBackground(canvas, opts.tolerance).canvas : canvas;
+    ctx.clearRect(0, 0, vw, vh);
+    ctx.drawImage(video, 0, 0);
+    let out = opts.chromaKey
+      ? removeSolidBackground(canvas, opts.tolerance, opts.edgeOnly, opts.erodePx, opts.decontaminate).canvas
+      : canvas;
+    if (w !== vw || h !== vh) {
+      resizeCtx.clearRect(0, 0, w, h);
+      resizeCtx.drawImage(out, 0, 0, w, h);
+      out = resized;
+    }
     items.push({
       bitmap: await createImageBitmap(out),
       blob: await canvasToBlob(out),

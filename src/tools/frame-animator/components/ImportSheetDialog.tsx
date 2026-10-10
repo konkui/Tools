@@ -22,6 +22,8 @@ type Mode = 'grid' | 'smart';
 interface Processed {
   bitmap: ImageBitmap;
   url: string;
+  source: ImageBitmap;
+  settingsKey: string;
 }
 
 export interface SheetDialogProps {
@@ -61,7 +63,19 @@ export function ImportSheetDialog({
   const [chromaOn, setChromaOn] = useState(false);
   const [autoKeyed, setAutoKeyed] = useState(false);
   const [tolerance, setTolerance] = useState(90);
+  const [edgeOnly, setEdgeOnly] = useState(true);
+  const [erodePx, setErodePx] = useState(0);
+  const [decontaminate, setDecontaminate] = useState(100);
   const [processed, setProcessed] = useState<Processed | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [previewZoom, setPreviewZoom] = useState<'fit' | '1' | '4'>('fit');
+  const [previewBg, setPreviewBg] = useState('checkerboard');
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [showBoxes, setShowBoxes] = useState(true);
+  const settingsKey = `${tolerance}:${edgeOnly}:${erodePx}:${decontaminate}`;
+  const current = chromaOn && processed?.source === bitmap && processed.settingsKey === settingsKey
+    ? processed : null;
+  const processing = chromaOn && !current;
 
   // 无透明通道的图片（如绿幕 JPG）自动开启色度键，否则智能识别无法工作
   useEffect(() => {
@@ -71,25 +85,41 @@ export function ImportSheetDialog({
     }
   }, [bitmap]);
 
-  // 色度键处理（防抖）
+  // 色度键处理（防抖），只接受当前参数的结果。
   useEffect(() => {
-    if (!chromaOn) {
-      setProcessed(null);
-      return;
-    }
+    setError(null);
+    setProcessed(null);
+    if (!chromaOn) return;
     let cancelled = false;
+    let result: Processed | null = null;
+    let bm: ImageBitmap | null = null;
     const timer = window.setTimeout(async () => {
-      const { canvas } = removeSolidBackground(bitmap, tolerance);
-      const bm = await createImageBitmap(canvas);
-      if (!cancelled) setProcessed({ bitmap: bm, url: canvas.toDataURL() });
+      try {
+        const { canvas } = removeSolidBackground(bitmap, tolerance, edgeOnly, erodePx, decontaminate / 100);
+        bm = await createImageBitmap(canvas);
+        const blob = await bitmapToBlob(bm);
+        if (cancelled) {
+          bm.close();
+          return;
+        }
+        result = { bitmap: bm, url: URL.createObjectURL(blob), source: bitmap, settingsKey };
+        setProcessed(result);
+      } catch (e) {
+        bm?.close();
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
     }, 150);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      if (result) {
+        result.bitmap.close();
+        URL.revokeObjectURL(result.url);
+      }
     };
-  }, [chromaOn, tolerance, bitmap]);
+  }, [chromaOn, tolerance, edgeOnly, erodePx, decontaminate, bitmap, settingsKey]);
 
-  const sliceSource = processed?.bitmap ?? bitmap;
+  const sliceSource = current?.bitmap ?? bitmap;
 
   const boxes: SliceBox[] = useMemo(() => {
     if (mode === 'grid') {
@@ -100,10 +130,10 @@ export function ImportSheetDialog({
 
   // 预览缩放比例
   const previewW = 380;
-  const scale = Math.min(1, previewW / bitmap.width);
+  const scale = previewZoom === 'fit' ? Math.min(1, previewW / bitmap.width, 300 / bitmap.height) : Number(previewZoom);
 
   const onConfirm = async () => {
-    if (!boxes.length || busy) return;
+    if (!boxes.length || busy || processing) return;
     setBusy(true);
     try {
       const bitmaps = await extractBoxBitmaps(sliceSource, boxes);
@@ -132,33 +162,57 @@ export function ImportSheetDialog({
             将切出 <b style={{ color: 'var(--text)' }}>{boxes.length}</b> 帧
           </span>
           <Button onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={!boxes.length || busy}>
-            {busy ? '切割中…' : confirmLabel}
+          <Button variant="primary" onClick={onConfirm} disabled={!boxes.length || busy || processing}>
+            {busy ? '切割中…' : error ? '处理失败' : processing ? '去背处理中…' : confirmLabel}
           </Button>
         </>
       }
     >
-      <div className="sheet-preview checkerboard">
-        <img
-          src={processed?.url ?? blobUrl}
-          alt=""
-          style={{ width: bitmap.width * scale, display: 'block' }}
-          draggable={false}
-        />
-        {boxes.map((b, i) => (
-          <div
-            key={i}
-            className="sheet-box"
-            style={{
-              left: b.x * scale,
-              top: b.y * scale,
-              width: b.w * scale,
-              height: b.h * scale,
-            }}
-          >
-            <i>{i}</i>
-          </div>
-        ))}
+      <div className="fa-key-preview-controls">
+        <label>缩放
+          <select className="input" aria-label="预览缩放" value={previewZoom}
+            onChange={(e) => setPreviewZoom(e.target.value as typeof previewZoom)}>
+            <option value="fit">适应窗口</option>
+            <option value="1">100% 原尺寸</option>
+            <option value="4">400% 像素检查</option>
+          </select>
+        </label>
+        <label>底色
+          <select className="input" aria-label="预览底色" value={previewBg} onChange={(e) => setPreviewBg(e.target.value)}>
+            <option value="checkerboard">透明棋盘</option>
+            <option value="dark">深色</option>
+            <option value="light">浅色</option>
+          </select>
+        </label>
+        <label><input type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} />原图</label>
+        <label><input type="checkbox" checked={showBoxes} onChange={(e) => setShowBoxes(e.target.checked)} />切割框</label>
+      </div>
+      <div className={`fa-key-preview-scroll ${previewBg === 'checkerboard' ? 'checkerboard' : `fa-key-bg-${previewBg}`}`}>
+        <div className="sheet-preview" style={{ width: bitmap.width * scale, height: bitmap.height * scale }}>
+          <img
+            src={showOriginal ? blobUrl : current?.url ?? blobUrl}
+            alt={showOriginal ? '原图预览' : '去背效果预览'}
+            style={{ width: bitmap.width * scale, display: 'block', imageRendering: scale >= 1 ? 'pixelated' : 'auto' }}
+            draggable={false}
+          />
+          {showBoxes && boxes.map((b, i) => (
+            <div
+              key={i}
+              className="sheet-box"
+              style={{
+                left: b.x * scale,
+                top: b.y * scale,
+                width: b.w * scale,
+                height: b.h * scale,
+              }}
+            >
+              <i>{i}</i>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="fa-key-hint" role="status">
+        {error ? `去背失败：${error}` : processing ? '正在处理最新参数，请稍候…' : `${bitmap.width}×${bitmap.height} · 按原始分辨率处理，预览缩放不影响导出`}
       </div>
 
       <div className="field-row" style={{ marginTop: 14 }}>
@@ -187,9 +241,39 @@ export function ImportSheetDialog({
           </span>
         )}
       </div>
+      {chromaOn && (
+        <div className="field-row" style={{ marginTop: -4 }}>
+          <label className="k" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={edgeOnly} onChange={(e) => setEdgeOnly(e.target.checked)} />
+            仅去除与边缘相连的区域
+          </label>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-dim)' }}>
+            边缘侵蚀
+            <input type="range" className="slider" style={{ width: 70 }} min={0} max={4} step={1}
+              value={erodePx} onChange={(e) => setErodePx(Number(e.target.value))} />
+            {erodePx}px
+          </span>
+        </div>
+      )}
+      {chromaOn && (
+        <div className="field-row">
+          <label className="k" htmlFor="sheet-decontaminate">边缘去色污染</label>
+          <span className="fa-key-range">
+            <input id="sheet-decontaminate" type="range" className="slider" min={0} max={100} step={5}
+              value={decontaminate} onChange={(e) => setDecontaminate(Number(e.target.value))} />
+            {decontaminate}%
+          </span>
+        </div>
+      )}
       {autoKeyed && chromaOn && (
         <div style={{ fontSize: 11.5, color: 'var(--amber)', marginBottom: 10 }}>
-          检测到图片无透明通道（绿幕/纯色底），已自动开启。仅去除与边缘相连的区域，前景内部相近颜色不受影响。
+          检测到图片无透明通道，已自动开启纯色去背；适用于白底、绿幕等纯色背景。
+        </div>
+      )}
+      {chromaOn && (
+        <div className="fa-key-hint">
+          去色污染用于减少白边/绿边，不模糊图像。默认侵蚀 0px 以保留细线；实体描边残留时再少量增加侵蚀。
+          {edgeOnly && '内部封闭的浅色区域会保留；若背景残留在空洞里，可关闭「仅去除与边缘相连的区域」。'}
         </div>
       )}
 

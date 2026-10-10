@@ -36,9 +36,13 @@ export function ImportVideoDialog({
   const [mode, setMode] = useState<SampleMode>('fps');
   const [fpsValue, setFpsValue] = useState(8);
   const [countValue, setCountValue] = useState(12);
-  const [targetHeight, setTargetHeight] = useState(160);
+  const [targetHeight, setTargetHeight] = useState(0);
+  const [pixelated, setPixelated] = useState(false);
   const [chromaOn, setChromaOn] = useState(true);
   const [tolerance, setTolerance] = useState(90);
+  const [edgeOnly, setEdgeOnly] = useState(true);
+  const [erodePx, setErodePx] = useState(0);
+  const [decontaminate, setDecontaminate] = useState(100);
   const [replace, setReplace] = useState(defaultReplace);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -46,7 +50,10 @@ export function ImportVideoDialog({
     let alive = true;
     loadVideo(file)
       .then((l) => {
-        if (!alive) return;
+        if (!alive) {
+          releaseVideo(l);
+          return;
+        }
         setLoaded(l);
         setTo(Number(l.info.duration.toFixed(2)));
       })
@@ -79,16 +86,23 @@ export function ImportVideoDialog({
   const onConfirm = async () => {
     if (!loaded || !times.length || extracting) return;
     setProgress({ done: 0, total: times.length });
+    setError(null);
     try {
       const items = await extractFrames(loaded.video, times, {
         chromaKey: chromaOn,
         tolerance,
+        edgeOnly,
+        erodePx,
+        decontaminate: decontaminate / 100,
         targetHeight,
+        pixelated,
         namePrefix: 'video',
         onProgress: (done, total) => setProgress({ done, total }),
       });
       onImport(items, replace);
       onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setProgress(null);
     }
@@ -162,12 +176,22 @@ export function ImportVideoDialog({
           </div>
           <div className="field-row">
             <span className="k">输出高度 (px)</span>
-            <input className="input" type="number" min={0} max={1080} step={8} value={targetHeight}
-              onChange={(e) => setTargetHeight(clampNum(Math.round(Number(e.target.value) || 0), 0, 1080))} />
+            <input className="input" aria-label="输出高度" type="number" min={0} max={info!.height} step={1} value={targetHeight}
+              onChange={(e) => setTargetHeight(clampNum(Math.round(Number(e.target.value) || 0), 0, info!.height))} />
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginBottom: 10 }}>
-            AI 视频通常是 720p/1080p，缩到精灵尺寸（如 128~192）再像素化效果更好；填 0 保持原始尺寸
+          <div className="fa-key-hint">
+            默认 0：保留原始 {info!.width}×{info!.height} 分辨率。先原图去背再缩放，避免背景混入轮廓；高分辨率批量抽帧会占用更多内存。
           </div>
+          {targetHeight > 0 && targetHeight < info!.height && (
+            <div className="field-row">
+              <label className="k" htmlFor="video-resize-mode">缩放方式</label>
+              <select id="video-resize-mode" className="input" value={pixelated ? 'pixelated' : 'smooth'}
+                onChange={(e) => setPixelated(e.target.value === 'pixelated')}>
+                <option value="smooth">高质量平滑（插画/视频）</option>
+                <option value="pixelated">最近邻（像素素材）</option>
+              </select>
+            </div>
+          )}
 
           <div className="field-row">
             <label className="k" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
@@ -184,9 +208,34 @@ export function ImportVideoDialog({
             )}
           </div>
           {chromaOn && (
-            <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginBottom: 10 }}>
-              视频帧无透明通道，生成视频时提示词加"纯白/纯绿背景、无阴影"效果最好
+            <div className="field-row" style={{ marginTop: -4 }}>
+              <label className="k" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="checkbox" checked={edgeOnly} onChange={(e) => setEdgeOnly(e.target.checked)} />
+                仅去除与边缘相连的区域
+              </label>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-dim)' }}>
+                边缘侵蚀
+                <input type="range" className="slider" style={{ width: 70 }} min={0} max={4} step={1}
+                  value={erodePx} onChange={(e) => setErodePx(Number(e.target.value))} />
+                {erodePx}px
+              </span>
             </div>
+          )}
+          {chromaOn && (
+            <>
+              <div className="field-row">
+                <label className="k" htmlFor="video-decontaminate">边缘去色污染</label>
+                <span className="fa-key-range">
+                  <input id="video-decontaminate" type="range" className="slider" min={0} max={100} step={5}
+                    value={decontaminate} onChange={(e) => setDecontaminate(Number(e.target.value))} />
+                  {decontaminate}%
+                </span>
+              </div>
+              <div className="fa-key-hint">
+                去色污染减少白边/绿边，不模糊主体。侵蚀默认 0px，调高会损失细线。
+                适用于纯色背景；上方视频为原片，非去背结果。
+              </div>
+            </>
           )}
 
           {showModeChoice && (

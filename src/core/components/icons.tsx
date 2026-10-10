@@ -127,6 +127,8 @@ const ICONS = {
       <path d="M15 10.5 21 7.5v9l-6-3z" />
     </>
   ),
+  up: <path d="M6 15l6-6 6 6" />,
+  down: <path d="M6 9l6 6 6-6" />,
 } as const;
 
 export type IconName = keyof typeof ICONS;
